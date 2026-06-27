@@ -1,0 +1,33 @@
+# ========== Python ==========
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+
+# ========== Virtual Environment ==========
+.venv/
+venv/
+env/
+
+# ========== IDE ==========
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ========== Qoder ==========
+.qoder/
+
+# ========== Logs ==========
+logs/
+*.log
+
+# ========== OS ==========
+.DS_Store
+Thumbs.db
+
+# ========== Sensitive Config ==========
+# 含有数据库密码、API Key 等敏感信息，请勿提交
+conf/app_config.yaml
