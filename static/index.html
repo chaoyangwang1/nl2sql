@@ -667,7 +667,6 @@ function recallBarHtml(pct) {
 function failureCountByReason(results, reason) {
     return results.filter(r => r.failure_reason === reason).length;
 }
-}
 
 async function triggerEvalRun() {
     const btn = document.getElementById('evalRunBtn');

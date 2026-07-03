@@ -2,13 +2,14 @@
 import asyncio
 import hashlib
 import time
+from typing import Any
 
 
 class TTLCache:
     """简单的 TTL 内存缓存，支持异步获取和设置"""
 
     def __init__(self, ttl_seconds: int = 60, max_size: int = 500):
-        self._cache: dict[str, tuple[float, any]] = {}
+        self._cache: dict[str, tuple[float, Any]] = {}
         self._ttl = ttl_seconds
         self._max_size = max_size
         self._lock = asyncio.Lock()
@@ -17,7 +18,7 @@ class TTLCache:
     def _make_key(query: str) -> str:
         return hashlib.sha256(query.encode("utf-8")).hexdigest()
 
-    async def get(self, query: str) -> any | None:
+    async def get(self, query: str) -> Any | None:
         key = self._make_key(query)
         async with self._lock:
             if key in self._cache:
@@ -27,7 +28,7 @@ class TTLCache:
                 del self._cache[key]
         return None
 
-    async def set(self, query: str, value: any) -> None:
+    async def set(self, query: str, value: Any) -> None:
         key = self._make_key(query)
         async with self._lock:
             # 超过容量时清除最旧的 20%

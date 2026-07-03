@@ -50,6 +50,8 @@ CREATE TABLE IF NOT EXISTS eval_result (
     result_data       JSON         NULL COMMENT '执行结果数据',
     elapsed_seconds   DECIMAL(8,3) NOT NULL DEFAULT 0.000 COMMENT '耗时(秒)',
     node_timings      JSON         NULL COMMENT '各节点耗时统计 {节点名: 秒数}',
+    expected_tables   JSON         NULL COMMENT '预期引用的表名列表',
+    expected_columns  JSON         NULL COMMENT '预期引用的列名列表',
     recall_details    JSON         NULL COMMENT '召回详情 {tables: [], columns: [], metrics: []}',
     is_passed         TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '是否通过',
     failure_reason    VARCHAR(64)  NULL COMMENT '失败原因分类: sql_error/execution_error/low_recall',

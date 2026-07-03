@@ -28,6 +28,9 @@ logs/
 .DS_Store
 Thumbs.db
 
+# ========== Claude Code ==========
+.claude/
+
 # ========== Sensitive Config ==========
 # 含有数据库密码、API Key 等敏感信息，请勿提交
 conf/app_config.yaml
