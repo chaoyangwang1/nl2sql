@@ -86,6 +86,26 @@ class EvalResultMySQL(Base):
         String(64),
         comment="失败原因分类: sql_error/execution_error/low_recall",
     )
+    node_timings: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment="各节点耗时统计 {节点名: 秒数}",
+    )
+    expected_tables: Mapped[list | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment="预期引用的表名列表",
+    )
+    expected_columns: Mapped[list | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment="预期引用的列名列表",
+    )
+    recall_details: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment="召回详情 {tables: [], columns: [], metrics: []}",
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         nullable=False,

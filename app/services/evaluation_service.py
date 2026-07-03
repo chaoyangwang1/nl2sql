@@ -109,6 +109,9 @@ class EvaluationService:
         result_data = None
         sql_valid = False
 
+        node_timings: dict[str, float] = {}
+        recall_details: dict = {}
+
         try:
             async for raw_chunk in self.query_service.query(q.question):
                 line = raw_chunk.strip()
@@ -118,6 +121,13 @@ class EvaluationService:
                     data = json.loads(line[5:].strip())
                 except (json.JSONDecodeError, AttributeError):
                     continue
+                if data.get("type") == "progress":
+                    step = data.get("step", "")
+                    elapsed_val = data.get("elapsed")
+                    if step and elapsed_val is not None:
+                        node_timings[step] = elapsed_val
+                if data.get("type") == "recall_detail":
+                    recall_details = data
                 if data.get("type") == "sql":
                     generated_sql = data.get("sql", "")
                 if data.get("type") == "progress" and data.get("step") == "验证SQL":
@@ -171,6 +181,14 @@ class EvaluationService:
         total = len(old_results)
         pass_rate = round((new_passed / total * 100), 2) if total else 0
 
+        # 重新计算召回率平均值（排除旧问题数据，加入新数据）
+        other_results = [r for r in old_results if r.question_id != question_id]
+        all_recalls = [(r.table_recall or 0, r.column_recall or 0, r.keyword_match or 0) for r in other_results]
+        all_recalls.append((table_recall, column_recall, keyword_match))
+        avg_table_recall = round(sum(t for t, _, _ in all_recalls) / len(all_recalls) * 100, 2)
+        avg_column_recall = round(sum(c for _, c, _ in all_recalls) / len(all_recalls) * 100, 2)
+        avg_keyword_match = round(sum(k for _, _, k in all_recalls) / len(all_recalls) * 100, 2)
+
         # 保存新结果（覆盖旧记录）
         async with self._tx_context():
             # 先删除旧的同 question_id 记录
@@ -198,6 +216,10 @@ class EvaluationService:
                 elapsed_seconds=elapsed,
                 is_passed=is_passed,
                 failure_reason=failure_reason,
+                node_timings=node_timings or None,
+                recall_details=recall_details or None,
+                expected_tables=q.expected_tables,
+                expected_columns=q.expected_columns,
             )
             # 更新汇总
             await self.eval_repo.update_run(
@@ -205,6 +227,9 @@ class EvaluationService:
                 passed=new_passed,
                 failed=new_failed,
                 pass_rate=pass_rate,
+                avg_table_recall=avg_table_recall,
+                avg_column_recall=avg_column_recall,
+                avg_keyword_match=avg_keyword_match,
             )
             await self._commit_if_needed()
 
@@ -237,6 +262,9 @@ class EvaluationService:
             passed = 0
             failed = 0
             total_latency = 0.0
+            total_table_recall = 0.0
+            total_column_recall = 0.0
+            total_keyword_match = 0.0
 
             # 3. 遍历每题
             for q in questions:
@@ -246,6 +274,8 @@ class EvaluationService:
                 execution_error = None
                 result_data = None
                 sql_valid = False
+                node_timings: dict[str, float] = {}
+                recall_details: dict = {}
 
                 try:
                     # 调用 query_service 收集 SSE chunks
@@ -257,6 +287,17 @@ class EvaluationService:
                             data = json.loads(line[5:].strip())
                         except (json.JSONDecodeError, AttributeError):
                             continue
+
+                        # 捕获每个节点的耗时
+                        if data.get("type") == "progress":
+                            step = data.get("step", "")
+                            elapsed_val = data.get("elapsed")
+                            if step and elapsed_val is not None:
+                                node_timings[step] = elapsed_val
+
+                        # 捕获召回详情
+                        if data.get("type") == "recall_detail":
+                            recall_details = data
 
                         # 捕获生成的 SQL
                         if data.get("type") == "sql":
@@ -319,6 +360,10 @@ class EvaluationService:
                 else:
                     failed += 1
 
+                total_table_recall += table_recall
+                total_column_recall += column_recall
+                total_keyword_match += keyword_match
+
                 # 7. 保存单题结果
                 async with self._tx_context():
                     await self.eval_repo.save_result(
@@ -337,12 +382,19 @@ class EvaluationService:
                         elapsed_seconds=elapsed,
                         is_passed=is_passed,
                         failure_reason=failure_reason,
+                        node_timings=node_timings or None,
+                        recall_details=recall_details or None,
+                        expected_tables=q.expected_tables,
+                        expected_columns=q.expected_columns,
                     )
                     await self._commit_if_needed()
 
             # 8. 更新运行汇总
-            avg_latency = total_latency / len(questions) if questions else 0
+            avg_latency = round(total_latency / len(questions), 3) if questions else 0
             pass_rate = round((passed / len(questions) * 100), 2) if questions else 0
+            avg_table_recall = round(total_table_recall / len(questions) * 100, 2) if questions else 0
+            avg_column_recall = round(total_column_recall / len(questions) * 100, 2) if questions else 0
+            avg_keyword_match = round(total_keyword_match / len(questions) * 100, 2) if questions else 0
 
             async with self._tx_context():
                 await self.eval_repo.update_run(
@@ -351,6 +403,9 @@ class EvaluationService:
                     failed=failed,
                     pass_rate=pass_rate,
                     avg_latency=avg_latency,
+                    avg_table_recall=avg_table_recall,
+                    avg_column_recall=avg_column_recall,
+                    avg_keyword_match=avg_keyword_match,
                     status="completed",
                     finished_at=datetime.now(),
                 )

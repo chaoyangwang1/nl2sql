@@ -25,6 +25,9 @@ CREATE TABLE IF NOT EXISTS eval_run (
     failed          INT          NOT NULL DEFAULT 0 COMMENT '失败数',
     pass_rate       DECIMAL(5,2) NOT NULL DEFAULT 0.00 COMMENT '通过率 %',
     avg_latency     DECIMAL(8,3) NOT NULL DEFAULT 0.000 COMMENT '平均延迟(秒)',
+    avg_table_recall DECIMAL(5,2) NULL COMMENT '平均表召回率 %',
+    avg_column_recall DECIMAL(5,2) NULL COMMENT '平均列召回率 %',
+    avg_keyword_match DECIMAL(5,2) NULL COMMENT '平均关键字匹配率 %',
     status          VARCHAR(16)  NOT NULL DEFAULT 'running' COMMENT 'running/completed/failed',
     started_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '开始时间',
     finished_at     DATETIME     NULL COMMENT '结束时间'
@@ -46,6 +49,8 @@ CREATE TABLE IF NOT EXISTS eval_result (
     execution_error   TEXT         NULL COMMENT '执行错误信息',
     result_data       JSON         NULL COMMENT '执行结果数据',
     elapsed_seconds   DECIMAL(8,3) NOT NULL DEFAULT 0.000 COMMENT '耗时(秒)',
+    node_timings      JSON         NULL COMMENT '各节点耗时统计 {节点名: 秒数}',
+    recall_details    JSON         NULL COMMENT '召回详情 {tables: [], columns: [], metrics: []}',
     is_passed         TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '是否通过',
     failure_reason    VARCHAR(64)  NULL COMMENT '失败原因分类: sql_error/execution_error/low_recall',
     created_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',

@@ -49,6 +49,21 @@ class EvalRunMySQL(Base):
         server_default="0.000",
         comment="平均延迟(秒)",
     )
+    avg_table_recall: Mapped[float | None] = mapped_column(
+        DECIMAL(5, 2),
+        nullable=True,
+        comment="平均表召回率 %",
+    )
+    avg_column_recall: Mapped[float | None] = mapped_column(
+        DECIMAL(5, 2),
+        nullable=True,
+        comment="平均列召回率 %",
+    )
+    avg_keyword_match: Mapped[float | None] = mapped_column(
+        DECIMAL(5, 2),
+        nullable=True,
+        comment="平均关键字匹配率 %",
+    )
     status: Mapped[str] = mapped_column(
         String(16),
         nullable=False,

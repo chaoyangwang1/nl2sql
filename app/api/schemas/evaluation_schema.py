@@ -54,6 +54,9 @@ class EvalRunResponse(BaseModel):
     failed: int
     pass_rate: float
     avg_latency: float
+    avg_table_recall: Optional[float] = None
+    avg_column_recall: Optional[float] = None
+    avg_keyword_match: Optional[float] = None
     status: str
     started_at: datetime
     finished_at: Optional[datetime] = None
@@ -82,6 +85,10 @@ class EvalResultResponse(BaseModel):
     elapsed_seconds: float
     is_passed: bool
     failure_reason: Optional[str] = None
+    node_timings: Optional[dict] = None
+    expected_tables: Optional[list] = None
+    expected_columns: Optional[list] = None
+    recall_details: Optional[dict] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

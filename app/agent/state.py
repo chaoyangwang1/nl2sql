@@ -41,7 +41,11 @@ class DBInfoState(TypedDict):
 
 class DataAgentState(TypedDict):
     query: str  # 用户查询
-    keywords: list[str]  # 用户查询的关键字
+    keywords: list[str]  # jieba 分词提取的关键字
+
+    column_keywords: list[str]  # 列召回扩展关键词
+    value_keywords: list[str]  # 值召回扩展关键词
+    metric_keywords: list[str]  # 指标召回扩展关键词
 
     retrieved_columns: list[ColumnInfo]  # 召回的字段信息
     retrieved_values: list[ValueInfo]  # 召回的值信息
@@ -54,6 +58,8 @@ class DataAgentState(TypedDict):
     db_info: DBInfoState  # 数据库信息
 
     sql: str  # 生成的SQL
+
+    few_shot_examples: list[dict]  # 检索到的相似历史查询示例
 
     error: str | None  # 验证SQL时的错误信息
 

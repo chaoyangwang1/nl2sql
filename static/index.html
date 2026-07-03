@@ -119,6 +119,36 @@
         .difficulty-easy { background:#dcfce7; color:#166534; }
         .difficulty-medium { background:#fef3c7; color:#92400e; }
         .difficulty-hard { background:#fee2e2; color:#991b1b; }
+
+        .recall-bar-wrap { display:flex; align-items:center; gap:6px; }
+        .recall-bar { flex:1; height:6px; background:#f1f5f9; border-radius:3px; overflow:hidden; min-width:60px; }
+        .recall-bar-fill { height:100%; border-radius:3px; transition:width .3s; }
+        .recall-bar-fill.high { background:#22c55e; } .recall-bar-fill.medium { background:#f59e0b; } .recall-bar-fill.low { background:#ef4444; }
+        .recall-value { font-size:12px; font-weight:600; min-width:40px; text-align:right; }
+        .recall-value.high { color:#16a34a; } .recall-value.medium { color:#d97706; } .recall-value.low { color:#dc2626; }
+        .recall-label { font-size:11px; color:var(--text-secondary); white-space:nowrap; }
+        .recall-col { min-width:130px; }
+        .failure-dist { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; font-size:12px; color:var(--text-secondary); }
+        .failure-tag { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; }
+        .failure-tag.sql_error { background:#fee2e2; color:#991b1b; }
+        .failure-tag.execution_error { background:#fef3c7; color:#92400e; }
+        .failure-tag.low_recall { background:#dbeafe; color:#1d4ed8; }
+
+        .timing-chart { margin-top:10px; }
+        .timing-row { display:flex; align-items:center; gap:8px; margin-bottom:4px; font-size:12px; }
+        .timing-label { min-width:100px; text-align:right; color:var(--text-secondary); white-space:nowrap; }
+        .timing-bar-wrap { flex:1; height:14px; background:#f1f5f9; border-radius:4px; overflow:hidden; position:relative; }
+        .timing-bar-fill { height:100%; border-radius:4px; position:absolute; left:0; top:0; transition:width .3s; }
+        .timing-val { min-width:42px; font-weight:600; font-size:11px; color:var(--text-secondary); }
+
+        .recall-detail-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-top:8px; }
+        .recall-detail-box { background:#f8fafc; border-radius:6px; padding:10px; }
+        .recall-detail-box h4 { font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; text-transform:uppercase; }
+        .recall-item { display:inline-block; padding:2px 8px; margin:2px; border-radius:4px; font-size:11px; }
+        .recall-item.table { background:#dbeafe; color:#1d4ed8; }
+        .recall-item.column { background:#d1fae5; color:#047857; }
+        .recall-item.metric { background:#fef3c7; color:#92400e; }
+        .recall-nodata { color:var(--text-secondary); font-size:12px; font-style:italic; }
     </style>
 </head>
 <body>
@@ -205,9 +235,9 @@
             <div class="card" id="evalRunListCard">
                 <div class="card-header"><span class="card-title">评估运行记录</span></div>
                 <table>
-                    <thead><tr><th>ID</th><th>名称</th><th>通过率</th><th>通过/总数</th><th>平均延迟</th><th>状态</th><th>时间</th><th>操作</th></tr></thead>
+                    <thead><tr><th>ID</th><th>名称</th><th>通过率</th><th>通过/总数</th><th>表召回</th><th>列召回</th><th>关键字</th><th>平均延迟</th><th>状态</th><th>时间</th><th>操作</th></tr></thead>
                     <tbody id="evalRunListBody">
-                        <tr><td colspan="8" class="empty-state"><div class="icon">📭</div>暂无评估记录</td></tr>
+                        <tr><td colspan="11" class="empty-state"><div class="icon">📭</div>暂无评估记录</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -604,21 +634,39 @@ async function loadEvalRuns() {
     const runs = await request('GET', '/api/evaluation/runs');
     const tbody = document.getElementById('evalRunListBody');
     if (!runs.length) {
-        tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><div class="icon">📭</div>暂无评估记录</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" class="empty-state"><div class="icon">📭</div>暂无评估记录</td></tr>';
         return;
     }
-    tbody.innerHTML = runs.map(r => `
+    tbody.innerHTML = runs.map(r => {
+        const tr = r.avg_table_recall != null ? recallBarHtml(r.avg_table_recall) : '—';
+        const cr = r.avg_column_recall != null ? recallBarHtml(r.avg_column_recall) : '—';
+        const km = r.avg_keyword_match != null ? recallBarHtml(r.avg_keyword_match) : '—';
+        return `
         <tr>
             <td>${r.id}</td>
-            <td><strong>${r.run_name}</strong></td>
+            <td><strong>${escapeHtml(r.run_name)}</strong></td>
             <td><strong style="color:${r.pass_rate >= 80 ? '#22c55e' : r.pass_rate >= 50 ? '#f59e0b' : '#ef4444'}">${r.pass_rate}%</strong></td>
             <td>${r.passed} / ${r.total_questions}</td>
+            <td class="recall-col">${tr}</td>
+            <td class="recall-col">${cr}</td>
+            <td class="recall-col">${km}</td>
             <td>${r.avg_latency}s</td>
             <td><span class="tag ${r.status === 'completed' ? 'tag-yes' : 'tag-no'}">${r.status}</span></td>
             <td style="font-size:12px;color:var(--text-secondary)">${new Date(r.started_at).toLocaleString()}</td>
             <td><button class="btn btn-outline btn-sm" onclick="viewEvalDetail(${r.id})">查看详情</button></td>
         </tr>
-    `).join('');
+    `;}).join('');
+}
+
+function recallBarHtml(pct) {
+    if (pct == null) return '—';
+    const level = pct >= 80 ? 'high' : pct >= 50 ? 'medium' : 'low';
+    return `<div class="recall-bar-wrap"><div class="recall-bar"><div class="recall-bar-fill ${level}" style="width:${Math.max(pct,3)}%"></div></div><span class="recall-value ${level}">${pct}%</span></div>`;
+}
+
+function failureCountByReason(results, reason) {
+    return results.filter(r => r.failure_reason === reason).length;
+}
 }
 
 async function triggerEvalRun() {
@@ -659,16 +707,70 @@ async function viewEvalDetail(runId) {
             <div class="eval-metric-label">通过/总数</div>
         </div>
         <div class="eval-metric-card">
-            <div class="eval-metric-value" style="color:#ef4444">${detail.failed}</div>
-            <div class="eval-metric-label">失败数</div>
+            <div class="eval-metric-value" style="color:${(detail.avg_table_recall||0) >= 80 ? '#22c55e' : (detail.avg_table_recall||0) >= 50 ? '#f59e0b' : '#ef4444'}">${detail.avg_table_recall != null ? detail.avg_table_recall + '%' : '—'}</div>
+            <div class="eval-metric-label">平均表召回率</div>
+        </div>
+        <div class="eval-metric-card">
+            <div class="eval-metric-value" style="color:${(detail.avg_column_recall||0) >= 80 ? '#22c55e' : (detail.avg_column_recall||0) >= 50 ? '#f59e0b' : '#ef4444'}">${detail.avg_column_recall != null ? detail.avg_column_recall + '%' : '—'}</div>
+            <div class="eval-metric-label">平均列召回率</div>
+        </div>
+        <div class="eval-metric-card">
+            <div class="eval-metric-value" style="color:${(detail.avg_keyword_match||0) >= 80 ? '#22c55e' : (detail.avg_keyword_match||0) >= 50 ? '#f59e0b' : '#ef4444'}">${detail.avg_keyword_match != null ? detail.avg_keyword_match + '%' : '—'}</div>
+            <div class="eval-metric-label">平均关键字匹配率</div>
         </div>
         <div class="eval-metric-card">
             <div class="eval-metric-value">${detail.avg_latency}s</div>
             <div class="eval-metric-label">平均延迟</div>
         </div>
     `;
+    // 失败原因分布
+    const failedResults = detail.failed_results || [];
+    if (failedResults.length > 0) {
+        const sqlErr = failureCountByReason(failedResults, 'sql_error');
+        const execErr = failureCountByReason(failedResults, 'execution_error');
+        const lowRec = failureCountByReason(failedResults, 'low_recall');
+        let distHtml = '<div class="failure-dist" style="margin-top:12px; padding:10px 16px; background:#fafbfc; border-radius:6px;"><span style="font-weight:600; margin-right:8px;">失败原因分布:</span>';
+        if (sqlErr) distHtml += `<span class="failure-tag sql_error">SQL错误 ${sqlErr} 题</span>`;
+        if (execErr) distHtml += `<span class="failure-tag execution_error">执行异常 ${execErr} 题</span>`;
+        if (lowRec) distHtml += `<span class="failure-tag low_recall">召回不足 ${lowRec} 题</span>`;
+        distHtml += '</div>';
+        document.getElementById('evalSummary').innerHTML += distHtml;
+    }
+
+    // 运行级节点平均耗时
+    document.getElementById('evalSummary').innerHTML += renderRunTimings(detail.results);
 
     renderEvalResults(detail.results);
+}
+
+function renderRunTimings(results) {
+    const allTimings = {};
+    let count = 0;
+    for (const r of results) {
+        if (r.node_timings) {
+            count++;
+            for (const [step, secs] of Object.entries(r.node_timings)) {
+                allTimings[step] = (allTimings[step] || 0) + secs;
+            }
+        }
+    }
+    if (count === 0) return '';
+    const entries = Object.entries(allTimings).map(([step, total]) => [step, Math.round(total / count * 1000) / 1000]);
+    entries.sort((a, b) => b[1] - a[1]);
+    const totalAvg = entries.reduce((s, [, v]) => s + v, 0);
+    let colorIdx = 0;
+    const rows = entries.map(([step, secs]) => {
+        const pct = totalAvg > 0 ? Math.round(secs / totalAvg * 100) : 0;
+        const color = NODE_COLORS[colorIdx++ % NODE_COLORS.length];
+        return `<div class="timing-row">
+            <span class="timing-label">${escapeHtml(step)}</span>
+            <div class="timing-bar-wrap">
+                <div class="timing-bar-fill" style="width:${Math.max(pct,1)}%; background:${color}"></div>
+            </div>
+            <span class="timing-val">${secs.toFixed(2)}s (${pct}%)</span>
+        </div>`;
+    }).join('');
+    return `<div class="card" style="margin-top:16px;"><div style="font-size:14px;font-weight:600;margin-bottom:10px;">⏱ 各节点平均耗时（${count} 题统计，总均耗时 ${totalAvg.toFixed(2)}s）</div><div class="timing-chart">${rows}</div></div>`;
 }
 
 function renderEvalResults(results) {
@@ -702,16 +804,111 @@ function renderEvalResults(results) {
                     <pre class="eval-sql-block">${escapeHtml(r.reference_sql || '—')}</pre>
                 </div>
             </div>
-            <div class="eval-metrics-row">
-                <span>表召回: <strong>${r.table_recall != null ? (r.table_recall * 100).toFixed(0) + '%' : '—'}</strong></span>
-                <span>列召回: <strong>${r.column_recall != null ? (r.column_recall * 100).toFixed(0) + '%' : '—'}</strong></span>
-                <span>关键字匹配: <strong>${r.keyword_match != null ? (r.keyword_match * 100).toFixed(0) + '%' : '—'}</strong></span>
-                <span>执行: <strong style="color:${r.execution_success ? '#22c55e' : '#ef4444'}">${r.execution_success ? '成功' : '失败'}</strong></span>
+            <div class="eval-metrics-row" style="align-items:center;">
+                <div style="flex:1; min-width:120px;">
+                    <span class="recall-label">表召回</span>
+                    ${r.table_recall != null ? recallBarHtml(Math.round(r.table_recall * 100)) : '<span style="font-size:12px">—</span>'}
+                </div>
+                <div style="flex:1; min-width:120px;">
+                    <span class="recall-label">列召回</span>
+                    ${r.column_recall != null ? recallBarHtml(Math.round(r.column_recall * 100)) : '<span style="font-size:12px">—</span>'}
+                </div>
+                <div style="flex:1; min-width:120px;">
+                    <span class="recall-label">关键字匹配</span>
+                    ${r.keyword_match != null ? recallBarHtml(Math.round(r.keyword_match * 100)) : '<span style="font-size:12px">—</span>'}
+                </div>
+                <div style="flex:0 0 auto;">
+                    <span class="recall-label">SQL执行</span>
+                    <strong style="font-size:13px;color:${r.execution_success ? '#22c55e' : '#ef4444'}">${r.execution_success ? '✓ 成功' : '✗ 失败'}</strong>
+                </div>
             </div>
             ${r.execution_error ? `<div class="eval-error-box">❗ ${escapeHtml(r.execution_error)}</div>` : ''}
+            ${renderNodeTimings(r.node_timings)}
+            ${renderRecallDetails(r.recall_details, r.expected_tables, r.expected_columns)}
             ${r.result_data ? `<details style="margin-top:8px;"><summary style="cursor:pointer; font-size:12px; color:var(--text-secondary);">查看返回数据 (${Array.isArray(r.result_data) ? r.result_data.length + ' 行' : '...'})</summary><pre style="background:#f8fafc; padding:8px; border-radius:6px; font-size:11px; max-height:200px; overflow:auto; margin-top:4px;">${escapeHtml(JSON.stringify(r.result_data, null, 2))}</pre></details>` : ''}
         </div>`;
     }).join('');
+}
+
+const NODE_COLORS = [
+    '#6366f1','#8b5cf6','#a855f7','#d946ef',
+    '#ec4899','#f43f5e','#ef4444','#f97316',
+    '#f59e0b','#eab308','#84cc16','#22c55e',
+    '#14b8a6','#06b6d4','#0ea5e9','#3b82f6',
+];
+
+function renderNodeTimings(timings) {
+    if (!timings || !Object.keys(timings).length) return '';
+    const entries = Object.entries(timings);
+    const total = entries.reduce((s, [, v]) => s + v, 0);
+    let colorIdx = 0;
+    const rows = entries.map(([step, secs]) => {
+        const pct = total > 0 ? Math.round(secs / total * 100) : 0;
+        const color = NODE_COLORS[colorIdx++ % NODE_COLORS.length];
+        return `<div class="timing-row">
+            <span class="timing-label">${escapeHtml(step)}</span>
+            <div class="timing-bar-wrap">
+                <div class="timing-bar-fill" style="width:${Math.max(pct,1)}%; background:${color}"></div>
+            </div>
+            <span class="timing-val">${secs}s (${pct}%)</span>
+        </div>`;
+    }).join('');
+    return `<details style="margin-top:8px;"><summary style="cursor:pointer; font-size:12px; color:var(--text-secondary); font-weight:600;">⏱ 节点耗时分布（总耗时 ${total.toFixed(2)}s）</summary>
+        <div class="timing-chart">${rows}</div></details>`;
+}
+
+function renderRecallDetails(details, expectedTables, expectedColumns) {
+    if (!details) return '';
+    const tables = details.tables || [];
+    const columns = details.columns || [];
+    const metrics = details.metrics || [];
+    if (!tables.length && !columns.length && !metrics.length) return '';
+    const noData = '<span class="recall-nodata">无</span>';
+
+    // 表对比
+    const expectedTblSet = new Set((expectedTables || []).map(t => t.toLowerCase()));
+    const tableItems = tables.map(t => {
+        const matched = expectedTblSet.has(t.toLowerCase());
+        const style = expectedTables && expectedTables.length
+            ? (matched ? 'background:#d1fae5;color:#047857;border:1px solid #86efac;' : 'background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;')
+            : '';
+        const icon = expectedTables && expectedTables.length ? (matched ? '✓ ' : '✗ ') : '';
+        return `<span class="recall-item table" style="${style}">${icon}${escapeHtml(t)}</span>`;
+    }).join(' ');
+    const missedTables = expectedTables ? expectedTables.filter(t => !tables.some(rt => rt.toLowerCase() === t.toLowerCase())) : [];
+    const missedTableItems = missedTables.map(t => `<span class="recall-item" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;">✗ ${escapeHtml(t)}</span>`).join(' ');
+
+    // 列对比
+    const expectedColSet = new Set((expectedColumns || []).map(c => c.toLowerCase()));
+    const columnItems = columns.map(c => {
+        const matched = expectedColSet.has(c.toLowerCase());
+        const style = expectedColumns && expectedColumns.length
+            ? (matched ? 'background:#d1fae5;color:#047857;border:1px solid #86efac;' : 'background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;')
+            : '';
+        const icon = expectedColumns && expectedColumns.length ? (matched ? '✓ ' : '✗ ') : '';
+        return `<span class="recall-item column" style="${style}">${icon}${escapeHtml(c)}</span>`;
+    }).join(' ');
+    const missedColumns = expectedColumns ? expectedColumns.filter(c => !columns.some(rc => rc.toLowerCase() === c.toLowerCase())) : [];
+    const missedColItems = missedColumns.map(c => `<span class="recall-item" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;">✗ ${escapeHtml(c)}</span>`).join(' ');
+
+    const totalCount = tables.length + columns.length + metrics.length;
+    return `<details style="margin-top:8px;" open><summary style="cursor:pointer; font-size:12px; color:var(--text-secondary); font-weight:600;">🔍 召回详情（表 ${tables.length} · 列 ${columns.length} · 指标 ${metrics.length}）</summary>
+        <div class="recall-detail-grid">
+            <div class="recall-detail-box">
+                <h4>📊 召回的表 (${tables.length})</h4>
+                ${tables.length ? tableItems : noData}
+                ${missedTables.length ? `<div style="margin-top:6px;font-size:11px;color:#991b1b;">⚠ 遗漏: ${missedTableItems}</div>` : (expectedTables && expectedTables.length ? '<div style="margin-top:4px;font-size:11px;color:#16a34a;">✅ 全部召回</div>' : '')}
+            </div>
+            <div class="recall-detail-box">
+                <h4>📋 召回的列 (${columns.length})</h4>
+                ${columns.length ? columnItems : noData}
+                ${missedColumns.length ? `<div style="margin-top:6px;font-size:11px;color:#991b1b;">⚠ 遗漏: ${missedColItems}</div>` : (expectedColumns && expectedColumns.length ? '<div style="margin-top:4px;font-size:11px;color:#16a34a;">✅ 全部召回</div>' : '')}
+            </div>
+            <div class="recall-detail-box">
+                <h4>📈 召回的指标 (${metrics.length})</h4>
+                ${metrics.length ? metrics.map(m => `<span class="recall-item metric">${escapeHtml(m)}</span>`).join(' ') : noData}
+            </div>
+        </div></details>`;
 }
 
 function filterEvalResults(mode) {
